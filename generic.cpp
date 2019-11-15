@@ -50,6 +50,26 @@ struct Generic<1, R>{
   std::unordered_map<std::string, std::function<R(std::any)>> vtable;
 };
 
+template<typename R>
+struct Generic<2, R>{
+
+  R operator()(std::any arg1, std::any arg2) {
+    const std::string tname1 = arg1.type().name();
+    const std::string tname2 = arg2.type().name();
+
+    // dispatch on first argument then second
+    if (vtable.find(tname1) != std::end(vtable) &&
+        vtable[tname1].find(tname2) != std::end(vtable[tname1])) {
+        return vtable[tname1][tname2](arg1, arg2);
+    } else {
+      // did not find method for current type
+      throw std::runtime_error(std::string("Could not find method for types: ") + tname1 + " - " + tname2);
+    }
+  }
+
+  std::unordered_map<std::string, std::unordered_map<std::string, std::function<R(std::any, std::any)>>> vtable;
+};
+
 template<size_t N, typename R>
 auto defgeneric() {
   return Generic<N, R>{};
@@ -68,8 +88,19 @@ void defmethod(Generic<N, R>& generic, Implementation&& implementation) {
                                       [implementation = std::forward<Implementation>(implementation)](std::any value) {
                                         return implementation(std::any_cast<Arg1>(value));
                                       }));
+  } else if constexpr (N == 2) {
+      using Arg1 = argument_type<0, Implementation>;
+      using Arg2 = argument_type<1, Implementation>;
+      generic.vtable[typeid(std::declval<Arg1>()).name()].insert(
+          std::make_pair<std::string,
+          std::function<R(std::any, std::any)>>(typeid(std::declval<Arg2>()).name(),
+                                                [implementation = std::forward<Implementation>(implementation)](std::any value1,
+                                                                                                                std::any value2) {
+                                                  return implementation(std::any_cast<Arg1>(value1),
+                                                                        std::any_cast<Arg2>(value2));
+                                                }));
   } else {
-    static_assert(N>1, "defmethod do not support arity > 1");
+    static_assert(N>2, "defmethod do not support arity > 2");
   }
 }
 
@@ -110,6 +141,10 @@ auto draw = defgeneric<1, void>();
 // defines a generic method with 1 argument called "perimeter" that return a float
 auto perimeter = defgeneric<1, float>();
 
+// defines a generic method with 2 arguments called "intersection" that returns void
+auto intersection = defgeneric<2, void>();
+
+
 int main(int argc, char* argv[]) {
 
   // method draw for Circle
@@ -136,6 +171,31 @@ int main(int argc, char* argv[]) {
               return 4 * c.length;
             });
 
+  // method intersection for Circle - Circle
+  defmethod(intersection,
+            [](Circle c1, Circle c2) {
+              std::cout << "Intersection of Circle with Circle" << std::endl;
+            });
+
+  // method intersection for Square - Circle
+  defmethod(intersection,
+            [](Square s, Circle c) {
+              std::cout << "Intersection of Square with Circle" << std::endl;
+            });
+
+  // method intersection for Circle - Square
+  defmethod(intersection,
+            [](Circle c, Square s) {
+              std::cout << "Intersection of Circle with Square" << std::endl;
+              //intersection(s, c);
+            });
+
+  // method intersection for Square - Square
+  defmethod(intersection,
+            [](Square s1, Square s2) {
+              std::cout << "Intersection of Square with Square" << std::endl;
+            });
+
   std::vector<std::any> shapes = {
     Circle{1.0f},
     Square{1.0f},
@@ -144,6 +204,8 @@ int main(int argc, char* argv[]) {
   for (auto shape : shapes) {
     draw(shape);
     std::cout << "perimeter: " << perimeter(shape) << std::endl;
+    intersection(shape, Circle{2.0f});
+    intersection(shape, Square{2.0f});
   }
 
   return 0;
