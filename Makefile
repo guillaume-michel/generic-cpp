@@ -1,10 +1,13 @@
-CXX=clang++-8
+CXX=clang++-9
 CXXFLAGS=-std=c++17 -Ofast -Wall -Werror
 
-all: generic
+all: generic virtual
 
 generic: generic.cpp Makefile
 	$(CXX) $(CXXFLAGS) generic.cpp -o $@
 
+virtual: virtual.cpp Makefile
+	$(CXX) $(CXXFLAGS) virtual.cpp -o $@
+
 clean:
-	rm -rf *.o generic
+	rm -rf *.o generic virtual
